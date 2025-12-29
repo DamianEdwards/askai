@@ -60,12 +60,13 @@ static async Task SendPromptToOpenAI(string url, string key, string prompt)
         var response = await httpClient.PostAsync(endpoint, content);
         var responseContent = await response.Content.ReadAsStringAsync();
         
-        Console.WriteLine(responseContent);
-        
         if (!response.IsSuccessStatusCode)
         {
+            Console.Error.WriteLine(responseContent);
             Environment.Exit(1);
         }
+        
+        Console.WriteLine(responseContent);
     }
     catch (Exception ex)
     {
