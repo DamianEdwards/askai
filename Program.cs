@@ -1,0 +1,75 @@
+using System.CommandLine;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+
+var urlOption = new Option<string>(
+    name: "--url",
+    description: "The OpenAI endpoint URL")
+{
+    IsRequired = true
+};
+
+var keyOption = new Option<string>(
+    name: "--key",
+    description: "The authentication token")
+{
+    IsRequired = true
+};
+
+var promptOption = new Option<string>(
+    name: "--prompt",
+    description: "The prompt to send to the OpenAI API")
+{
+    IsRequired = true
+};
+
+var rootCommand = new RootCommand("A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.");
+rootCommand.AddOption(urlOption);
+rootCommand.AddOption(keyOption);
+rootCommand.AddOption(promptOption);
+
+rootCommand.SetHandler(async (string url, string key, string prompt) =>
+{
+    await SendPromptToOpenAI(url, key, prompt);
+}, urlOption, keyOption, promptOption);
+
+return await rootCommand.InvokeAsync(args);
+
+static async Task SendPromptToOpenAI(string url, string key, string prompt)
+{
+    using var httpClient = new HttpClient();
+    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+    
+    var requestBody = new
+    {
+        model = "gpt-3.5-turbo",
+        messages = new[]
+        {
+            new { role = "user", content = prompt }
+        }
+    };
+    
+    var jsonContent = JsonSerializer.Serialize(requestBody);
+    var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+    
+    var endpoint = url.TrimEnd('/') + "/chat/completions";
+    
+    try
+    {
+        var response = await httpClient.PostAsync(endpoint, content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        
+        Console.WriteLine(responseContent);
+        
+        if (!response.IsSuccessStatusCode)
+        {
+            Environment.Exit(1);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(1);
+    }
+}
