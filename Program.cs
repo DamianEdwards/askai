@@ -16,14 +16,11 @@ rootCommand.Options.Add(promptOption);
 
 rootCommand.SetAction(parseResult =>
 {
-    var url = parseResult.GetValue(urlOption);
-    var key = parseResult.GetValue(keyOption);
-    var prompt = parseResult.GetValue(promptOption);
+    var url = parseResult.GetValue(urlOption)!;
+    var key = parseResult.GetValue(keyOption)!;
+    var prompt = parseResult.GetValue(promptOption)!;
     
-    if (url != null && key != null && prompt != null)
-    {
-        SendPromptToOpenAI(url, key, prompt).Wait();
-    }
+    SendPromptToOpenAI(url, key, prompt).GetAwaiter().GetResult();
 });
 
 return rootCommand.Parse(args).Invoke();
