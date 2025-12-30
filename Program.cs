@@ -14,16 +14,16 @@ rootCommand.Options.Add(urlOption);
 rootCommand.Options.Add(keyOption);
 rootCommand.Options.Add(promptOption);
 
-rootCommand.SetAction(parseResult =>
+rootCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var url = parseResult.GetValue(urlOption)!;
     var key = parseResult.GetValue(keyOption)!;
     var prompt = parseResult.GetValue(promptOption)!;
     
-    SendPromptToOpenAI(url, key, prompt).GetAwaiter().GetResult();
+    await SendPromptToOpenAI(url, key, prompt);
 });
 
-return rootCommand.Parse(args).Invoke();
+return await rootCommand.Parse(args).InvokeAsync();
 
 static async Task SendPromptToOpenAI(string url, string key, string prompt)
 {
