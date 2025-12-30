@@ -1,42 +1,32 @@
-#:package System.CommandLine@2.0.0-beta4.22272.1
+#:package System.CommandLine@2.0.1
 
 using System.CommandLine;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-var urlOption = new Option<string>(
-    name: "--url",
-    description: "The OpenAI endpoint URL")
-{
-    IsRequired = true
-};
-
-var keyOption = new Option<string>(
-    name: "--key",
-    description: "The authentication token")
-{
-    IsRequired = true
-};
-
-var promptOption = new Option<string>(
-    name: "--prompt",
-    description: "The prompt to send to the OpenAI API")
-{
-    IsRequired = true
-};
+var urlOption = new Option<string>("--url") { Description = "The OpenAI endpoint URL", Required = true };
+var keyOption = new Option<string>("--key") { Description = "The authentication token", Required = true };
+var promptOption = new Option<string>("--prompt") { Description = "The prompt to send to the OpenAI API", Required = true };
 
 var rootCommand = new RootCommand("A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.");
-rootCommand.AddOption(urlOption);
-rootCommand.AddOption(keyOption);
-rootCommand.AddOption(promptOption);
+rootCommand.Options.Add(urlOption);
+rootCommand.Options.Add(keyOption);
+rootCommand.Options.Add(promptOption);
 
-rootCommand.SetHandler(async (string url, string key, string prompt) =>
+rootCommand.SetAction(parseResult =>
 {
-    await SendPromptToOpenAI(url, key, prompt);
-}, urlOption, keyOption, promptOption);
+    var url = parseResult.GetValue(urlOption);
+    var key = parseResult.GetValue(keyOption);
+    var prompt = parseResult.GetValue(promptOption);
+    
+    if (url != null && key != null && prompt != null)
+    {
+        SendPromptToOpenAI(url, key, prompt).Wait();
+    }
+});
 
-return await rootCommand.InvokeAsync(args);
+return rootCommand.Parse(args).Invoke();
 
 static async Task SendPromptToOpenAI(string url, string key, string prompt)
 {
