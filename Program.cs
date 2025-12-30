@@ -4,6 +4,7 @@ using System.CommandLine;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var urlOption = new Option<string>("--url") { Description = "The OpenAI endpoint URL", Required = true };
 var keyOption = new Option<string?>("--key") { Description = "The authentication token" };
@@ -92,20 +93,16 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
     using var httpClient = new HttpClient();
     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
     
-    var requestBody = new
+    var requestBody = new ChatCompletionRequest
     {
-        model = model,
-        messages = new[]
+        Model = model,
+        Messages = new[]
         {
-            new { role = "user", content = prompt }
+            new ChatMessage { Role = "user", Content = prompt }
         }
     };
     
-    var jsonOptions = new JsonSerializerOptions
-    {
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
-    };
-    var jsonContent = JsonSerializer.Serialize(requestBody, jsonOptions);
+    var jsonContent = JsonSerializer.Serialize(requestBody, AppJsonSerializerContext.Default.ChatCompletionRequest);
     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
     
     var endpoint = url.TrimEnd('/') + "/chat/completions";
@@ -128,4 +125,31 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
         Console.Error.WriteLine($"Error: {ex.Message}");
         Environment.Exit(1);
     }
+}
+
+// Models for JSON serialization
+class ChatCompletionRequest
+{
+    [JsonPropertyName("model")]
+    public required string Model { get; set; }
+    
+    [JsonPropertyName("messages")]
+    public required ChatMessage[] Messages { get; set; }
+}
+
+class ChatMessage
+{
+    [JsonPropertyName("role")]
+    public required string Role { get; set; }
+    
+    [JsonPropertyName("content")]
+    public required string Content { get; set; }
+}
+
+// JSON source generator context for native AOT support
+[JsonSerializable(typeof(ChatCompletionRequest))]
+[JsonSerializable(typeof(ChatMessage))]
+[JsonSerializable(typeof(ChatMessage[]))]
+internal partial class AppJsonSerializerContext : JsonSerializerContext
+{
 }
