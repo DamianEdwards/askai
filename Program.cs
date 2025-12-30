@@ -1,3 +1,5 @@
+#:package System.CommandLine@2.0.0-beta4.22272.1
+
 using System.CommandLine;
 using System.Net.Http.Headers;
 using System.Text;

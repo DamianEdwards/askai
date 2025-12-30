@@ -1,6 +1,8 @@
 # askai
 A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.
 
+This is a [file-based .NET app](https://learn.microsoft.com/en-us/dotnet/core/sdk/file-based-apps) that uses the `#:package` directive for package references.
+
 ## Usage
 
 ```bash
@@ -19,15 +21,10 @@ askai --url <url> --key <key> --prompt <prompt>
 askai --url https://api.openai.com/v1 --key YOUR_API_KEY --prompt "tell me a joke"
 ```
 
-## Building
-
-```bash
-dotnet build
-```
-
 ## Running
 
 ```bash
-dotnet run -- --url <url> --key <key> --prompt <prompt>
+dotnet run Program.cs -- --url <url> --key <key> --prompt <prompt>
 ```
+
 
