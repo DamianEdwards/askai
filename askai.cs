@@ -8,6 +8,7 @@
 #:property VersionPrefix=0.0.1
 
 using System.CommandLine;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -27,7 +28,7 @@ configurationBuilder.AddUserSecrets<Program>(optional: true);
 var configuration = configurationBuilder.Build();
 
 var urlOption = new Option<string>("--url") { Description = "The OpenAI API endpoint URL. Defaults to GitHub Models. [env: ASKAI_URL]", DefaultValueFactory = _ => configuration["url"] ?? "https://models.github.ai/inference" };
-var keyOption = new Option<string?>("--key") { Required = true, Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc. [env: ASKAI_KEY]", DefaultValueFactory = _ => configuration["key"] };
+var keyOption = new Option<string?>("--key") { Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc. [env: ASKAI_KEY]", DefaultValueFactory = _ => configuration["key"] };
 var modelOption = new Option<string>("--model") { Description = "The model to use. Defaults to gpt-5-mini. [env: ASKAI_MODEL]", DefaultValueFactory = _ => configuration["model"] ?? "gpt-5-mini" };
 var validModels = new[] { "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom" };
 modelOption.CompletionSources.Add(validModels);
@@ -79,11 +80,46 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     });
     var logger = loggerFactory.CreateLogger("askai");
     
-    // Validate that --key is provided
+    // Determine if we're using GitHub Models endpoint
+    var isGitHubModels = url.Contains("models.github.ai", StringComparison.OrdinalIgnoreCase);
+    
+    // Get authentication key
     if (string.IsNullOrEmpty(key))
     {
-        Console.Error.WriteLine($"Error: {keyOption.Name} must be specified (or set via ASKAI_KEY environment variable).");
-        Environment.Exit(1);
+        if (isGitHubModels)
+        {
+            // Try to get token from gh CLI
+            if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("No key provided, attempting to get token from gh CLI");
+            key = await TryGetGitHubCliTokenAsync(logger);
+            
+            if (string.IsNullOrEmpty(key))
+            {
+                // gh CLI not available or not authenticated
+                var ghAvailable = await IsGitHubCliAvailableAsync();
+                if (ghAvailable)
+                {
+                    Console.Error.WriteLine("Error: Not authenticated with GitHub CLI.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Please run 'gh auth login' to authenticate, or provide a token via --key or ASKAI_KEY.");
+                }
+                else
+                {
+                    Console.Error.WriteLine("Error: No authentication token provided.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Options:");
+                    Console.Error.WriteLine("  1. Install the GitHub CLI (https://cli.github.com) and run 'gh auth login'");
+                    Console.Error.WriteLine("  2. Provide a GitHub Personal Access Token via --key or ASKAI_KEY environment variable");
+                }
+                Environment.Exit(1);
+            }
+            
+            if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Successfully retrieved token from gh CLI");
+        }
+        else
+        {
+            Console.Error.WriteLine($"Error: {keyOption.Name} must be specified (or set via ASKAI_KEY environment variable).");
+            Environment.Exit(1);
+        }
     }
     
     // Validate model option
@@ -184,6 +220,70 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
         if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug(ex, "Request failed with exception");
         Console.Error.WriteLine($"Error: {ex.Message}");
         Environment.Exit(1);
+    }
+}
+
+static async Task<bool> IsGitHubCliAvailableAsync()
+{
+    try
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "gh",
+            Arguments = "--version",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        });
+        
+        if (process is null) return false;
+        
+        await process.WaitForExitAsync();
+        return process.ExitCode == 0;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static async Task<string?> TryGetGitHubCliTokenAsync(ILogger logger)
+{
+    try
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "gh",
+            Arguments = "auth token",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        });
+        
+        if (process is null)
+        {
+            if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Failed to start gh process");
+            return null;
+        }
+        
+        var token = await process.StandardOutput.ReadToEndAsync();
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        
+        if (process.ExitCode != 0)
+        {
+            if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("gh auth token failed: {Error}", error);
+            return null;
+        }
+        
+        return token.Trim();
+    }
+    catch (Exception ex)
+    {
+        if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug(ex, "Failed to get token from gh CLI");
+        return null;
     }
 }
 
