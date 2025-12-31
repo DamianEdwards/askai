@@ -30,7 +30,7 @@ var configuration = configurationBuilder.Build();
 var urlOption = new Option<string>("--url") { Description = "The OpenAI API endpoint URL. Defaults to GitHub Models. [env: ASKAI_URL]", DefaultValueFactory = _ => configuration["url"] ?? "https://models.github.ai/inference" };
 var keyOption = new Option<string?>("--key") { Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc. [env: ASKAI_KEY]", DefaultValueFactory = _ => configuration["key"] };
 var modelOption = new Option<string>("--model") { Description = "The model to use. Defaults to gpt-5-mini. [env: ASKAI_MODEL]", DefaultValueFactory = _ => configuration["model"] ?? "gpt-5-mini" };
-var validModels = new[] { "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom" };
+var validModels = new[] { "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-chat", "custom" };
 modelOption.CompletionSources.Add(validModels);
 modelOption.Validators.Add(result =>
 {
