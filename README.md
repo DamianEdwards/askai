@@ -10,9 +10,20 @@ askai "tell me a joke"
 ### Options
 
 - `--url`: The OpenAI endpoint URL. Defaults to `https://models.github.ai/inference`
-- `--key`: The authentication token for the OpenAI API
+- `--key`: The authentication token (PAT for GitHub Models, API key for OpenAI, etc.)
 - `--model`: The model to use. Valid values: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `custom`. Defaults to `gpt-5-mini`
 - `--custom-model`: The custom model name (required when `--model` is `custom`)
+- `--verbosity`: Set the verbosity level. Valid values: `minimal`, `normal`, `detailed`, `diagnostic`. Defaults to `normal`
+- `-v`: Shorthand for `--verbosity diagnostic`
+
+### Verbosity Levels
+
+| Level | Description |
+|-------|-------------|
+| `minimal` | Just prints the AI response |
+| `normal` | Prints the question and answer (default) |
+| `detailed` | Adds debug information to stderr |
+| `diagnostic` | Adds full diagnostic information to stderr |
 
 ### Arguments
 
@@ -80,6 +91,16 @@ With key configured via environment variable:
 ```bash
 export AskAI__Key="your-api-key-here"
 askai "tell me a joke"
+```
+
+With diagnostic verbosity:
+```bash
+askai -v "tell me a joke"
+```
+
+With minimal output (just the answer):
+```bash
+askai --verbosity minimal "tell me a joke"
 ```
 
 ## Running
