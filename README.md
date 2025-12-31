@@ -1,10 +1,16 @@
 # askai
 A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.
 
+## Prerequisites
+
+This tool is currently only available as source (via this repo) and requires the .NET 10 SDK to run.
+
+.NET 10 is open-source and supports Windows, macOS, and Linux. Get it from https://get.dot.net.
+
 ## Usage
 
 ```bash
-askai "tell me a joke"
+dotnet askai.cs "tell me a joke"
 ```
 
 ### Options
@@ -55,6 +61,19 @@ Create an `askai.settings.json` file in the same directory:
 }
 ```
 
+#### Response files
+
+You can optionally provide any option or argument values via a response (.rsp) file. This can be particularly useful to pass a larger prompt, e.g. in automation scenarios. You can provide values for different options and the prompt argument from different sources, e.g. key from environment variable, prompt from a response file, e.g.:
+
+```bash
+echo "Imagine this prompt was built up and emitted by some more complex automation logic." > prompt.rsp
+export ASKAI_KEY="your-api-key-here"
+export ASKAI_MODEL="gpt-5.2"
+dotnet askai.cs @prompt.rsp
+```
+
+Learn more about using response files in the [`System.CommandLine` documentation](https://learn.microsoft.com/dotnet/standard/commandline/syntax#response-files);
+
 #### User Secrets
 
 You can also use .NET user secrets when running a DEBUG build (e.g. from source):
@@ -67,44 +86,38 @@ dotnet user-secrets --file askai.cs set key "your-api-key-here"
 
 Using GitHub Models (default URL):
 ```bash
-askai --key YOUR_API_KEY "tell me a joke"
+dotnet askai.cs --key YOUR_API_KEY "tell me a joke"
 ```
 
 Using a specific model:
 ```bash
-askai --key YOUR_API_KEY --model gpt-5.2 "tell me a joke"
+dotnet askai.cs --key YOUR_API_KEY --model gpt-5.2 "tell me a joke"
 ```
 
 Using a custom model:
 ```bash
-askai --key YOUR_API_KEY --model custom --custom-model my-fine-tuned-model "tell me a joke"
+dotnet askai.cs --key YOUR_API_KEY --model custom --custom-model my-fine-tuned-model "tell me a joke"
 ```
 
 Using a different endpoint:
 ```bash
-askai --url https://api.openai.com/v1 --key YOUR_API_KEY "tell me a joke"
+dotnet askai.cs --url https://api.openai.com/v1 --key YOUR_API_KEY "tell me a joke"
 ```
 
 With key configured via environment variable:
 ```bash
 export ASKAI_KEY="your-api-key-here"
-askai "tell me a joke"
+dotnet askai.cs "tell me a joke"
 ```
 
 With diagnostic verbosity:
 ```bash
-askai -v "tell me a joke"
+dotnet askai.cs -v "tell me a joke"
 ```
 
 With minimal output (just the answer):
 ```bash
-askai --verbosity minimal "tell me a joke"
-```
-
-## Running from source
-
-```bash
-dotnet askai.cs -- "tell me a joke"
+dotnet askai.cs --verbosity minimal "tell me a joke"
 ```
 
 ## Publishing from source
@@ -117,4 +130,13 @@ dotnet publish askai.cs
 
 *NOTE: This requires the prerequisites for building native AOT binaries for your platform. See the [documentation for full details](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites).*
 
+Now you can run the output directly:
 
+```bash
+cd ./artifacts/askai
+askai "tell me a joke"
+```
+
+## Other resources
+
+Learn more about working with [.NET 10 file-based apps via the documentation](https://learn.microsoft.com/dotnet/core/sdk/file-based-apps).
