@@ -4,49 +4,88 @@ A command-line tool that sends a user-provided prompt to an OpenAI endpoint and 
 ## Usage
 
 ```bash
-askai --url <url> --key <key> --prompt <prompt>
-# OR
-askai --url <url> --key-env <env-var-name> --prompt <prompt>
+askai "tell me a joke"
 ```
 
 ### Options
 
-- `--url` (required): The OpenAI endpoint URL (e.g., `https://api.openai.com/v1`)
-- `--key`: The authentication token for the OpenAI API (one of `--key` or `--key-env` is required)
-- `--key-env`: The name of the environment variable containing the authentication token (one of `--key` or `--key-env` is required)
+- `--url`: The OpenAI endpoint URL. Defaults to `https://models.github.ai/inference`
+- `--key`: The authentication token for the OpenAI API
 - `--model`: The model to use. Valid values: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `custom`. Defaults to `gpt-5-mini`
 - `--custom-model`: The custom model name (required when `--model` is `custom`)
-- `--prompt` (required): The prompt to send to the OpenAI API
+
+### Arguments
+
+- `prompt` (required): The prompt to send to the OpenAI API
+
+### Configuration
+
+Options can be configured via environment variables, a JSON settings file, or user secrets. Command-line options take precedence over configuration values.
+
+#### Environment Variables
+
+Set environment variables with the `AskAI__` prefix:
+
+```bash
+export AskAI__Key="your-api-key-here"
+export AskAI__Url="https://api.openai.com/v1"
+export AskAI__Model="gpt-5.2"
+```
+
+#### Settings File
+
+Create an `askai.settings.json` file in the same directory:
+
+```json
+{
+  "AskAI": {
+    "Key": "your-api-key-here",
+    "Url": "https://models.github.ai/inference",
+    "Model": "gpt-5-mini"
+  }
+}
+```
+
+#### User Secrets
+
+You can also use .NET user secrets:
+
+```bash
+dotnet user-secrets --id askai set "AskAI:Key" "your-api-key-here"
+```
 
 ### Examples
 
-Using a direct API key with default model:
+Using GitHub Models (default URL):
 ```bash
-askai --url https://api.openai.com/v1 --key YOUR_API_KEY --prompt "tell me a joke"
+askai --key YOUR_API_KEY "tell me a joke"
 ```
 
 Using a specific model:
 ```bash
-askai --url https://api.openai.com/v1 --key YOUR_API_KEY --model gpt-5.2 --prompt "tell me a joke"
+askai --key YOUR_API_KEY --model gpt-5.2 "tell me a joke"
 ```
 
 Using a custom model:
 ```bash
-askai --url https://api.openai.com/v1 --key YOUR_API_KEY --model custom --custom-model my-fine-tuned-model --prompt "tell me a joke"
+askai --key YOUR_API_KEY --model custom --custom-model my-fine-tuned-model "tell me a joke"
 ```
 
-Using an environment variable for the API key:
+Using a different endpoint:
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
-askai --url https://api.openai.com/v1 --key-env OPENAI_API_KEY --prompt "tell me a joke"
+askai --url https://api.openai.com/v1 --key YOUR_API_KEY "tell me a joke"
+```
+
+With key configured via environment variable:
+```bash
+export AskAI__Key="your-api-key-here"
+askai "tell me a joke"
 ```
 
 ## Running
 
 ```bash
-dotnet run Program.cs -- --url <url> --key <key> --prompt <prompt>
-# OR
-dotnet run Program.cs -- --url <url> --key-env <env-var-name> --prompt <prompt>
+dotnet run askai.cs -- "tell me a joke"
 ```
 
 

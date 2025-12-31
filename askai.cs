@@ -3,6 +3,8 @@
 #:package Microsoft.Extensions.Configuration.EnvironmentVariables@10.0.1
 #:package Microsoft.Extensions.Configuration.Json@10.0.1
 #:package Microsoft.Extensions.Configuration.UserSecrets@10.0.1
+#:package Microsoft.Extensions.Logging@10.0.1
+#:package Microsoft.Extensions.Logging.Console@10.0.1
 
 using System.CommandLine;
 using System.Net.Http.Headers;
@@ -10,6 +12,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 // Build configuration from standard sources
 var configuration = new ConfigurationBuilder()
@@ -20,18 +23,32 @@ var configuration = new ConfigurationBuilder()
 
 var configSection = configuration.GetSection("AskAI");
 
-var urlOption = new Option<string>("--url") { Description = "The OpenAI endpoint URL", DefaultValueFactory = _ => configSection["Url"] ?? "https://models.github.ai/inference" };
-var keyOption = new Option<string?>("--key") { Description = "The authentication token", DefaultValueFactory = _ => configSection["Key"] };
-var modelOption = new Option<string?>("--model") { Description = "The model to use. Defaults to gpt-5-mini", DefaultValueFactory = _ => configSection["Model"] };
-modelOption.CompletionSources.Add(["gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom"]);
+var urlOption = new Option<string>("--url") { Description = "The OpenAI API endpoint URL. Defaults to GitHub Models (https://models.github.ai/inference).", DefaultValueFactory = _ => configSection["Url"] ?? "https://models.github.ai/inference" };
+var keyOption = new Option<string?>("--key") { Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc.", DefaultValueFactory = _ => configSection["Key"] };
+var modelOption = new Option<string?>("--model") { Description = "The model to use. Defaults to gpt-5-mini", DefaultValueFactory = _ => configSection["Model"] ?? "gpt-5-mini" };
+var validModels = new[] { "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom" };
+modelOption.CompletionSources.Add(validModels);
+modelOption.Validators.Add(result =>
+{
+    var value = result.GetValueOrDefault<string>();
+    if (value is not null && !validModels.Contains(value))
+    {
+        result.AddError($"Invalid model '{value}'. Valid values are: {string.Join(", ", validModels)}");
+    }
+});
 var customModelOption = new Option<string?>("--custom-model") { Description = "The custom model name (required when --model is 'custom')", DefaultValueFactory = _ => configSection["CustomModel"] };
+var verbosityOption = new Option<Verbosity>("--verbosity") { Description = "Set the verbosity level", DefaultValueFactory = _ => Verbosity.Normal };
+verbosityOption.CompletionSources.Add(["m", "minimal", "n", "normal", "d", "detailed", "diag", "diagnostic"]);
+var verbosityShortOption = new Option<bool>("-v") { Description = "Enable diagnostic verbosity (shorthand for --verbosity diagnostic)" };
 var promptArgument = new Argument<string>("prompt") { Description = "The prompt to send to the OpenAI API" };
 
-var rootCommand = new RootCommand("A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.");
+var rootCommand = new RootCommand("A command-line tool that sends a user-provided prompt to an OpenAI API endpoint and prints the response.");
 rootCommand.Options.Add(urlOption);
 rootCommand.Options.Add(keyOption);
 rootCommand.Options.Add(modelOption);
 rootCommand.Options.Add(customModelOption);
+rootCommand.Options.Add(verbosityOption);
+rootCommand.Options.Add(verbosityShortOption);
 rootCommand.Arguments.Add(promptArgument);
 
 rootCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -40,17 +57,33 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var key = parseResult.GetValue(keyOption);
     var model = parseResult.GetValue(modelOption) ?? "gpt-5-mini";
     var customModel = parseResult.GetValue(customModelOption);
+    var verbosity = parseResult.GetValue(verbosityShortOption) ? Verbosity.Diagnostic : parseResult.GetValue(verbosityOption);
     var prompt = parseResult.GetValue(promptArgument)!;
+    
+    // Create logger based on verbosity
+    using var loggerFactory = LoggerFactory.Create(builder =>
+    {
+        builder.AddConsole(options =>
+        {
+            options.LogToStandardErrorThreshold = LogLevel.Trace;
+        });
+        builder.SetMinimumLevel(verbosity switch
+        {
+            Verbosity.Diagnostic => LogLevel.Trace,
+            Verbosity.Detailed => LogLevel.Debug,
+            _ => LogLevel.None
+        });
+    });
+    var logger = loggerFactory.CreateLogger("AskAI");
     
     // Validate that --key is provided
     if (string.IsNullOrEmpty(key))
     {
-        Console.Error.WriteLine("Error: --key must be specified (or set via AskAI__Key environment variable).");
+        Console.Error.WriteLine("Error: --key must be specified (or set via ASKAI__KEY environment variable).");
         Environment.Exit(1);
     }
     
     // Validate model option
-    var validModels = new[] { "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom" };
     if (!validModels.Contains(model))
     {
         Console.Error.WriteLine($"Error: Invalid model '{model}'. Valid values are: {string.Join(", ", validModels)}");
@@ -71,33 +104,44 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     }
     
     // Get the actual model name
-    string actualModel = model == "custom" ? customModel! : model;
+    var actualModel = model == "custom" ? customModel! : model;
     
-    await SendPromptToOpenAI(url, key, actualModel, prompt);
+    await SendPromptToOpenAI(url, key, actualModel, prompt, verbosity, logger);
 });
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-static async Task SendPromptToOpenAI(string url, string key, string model, string prompt)
+static async Task SendPromptToOpenAI(string url, string key, string model, string prompt, Verbosity verbosity, ILogger logger)
 {
+    if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Starting request to OpenAI API");
+    if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("URL: {Url}", url);
+    if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("Model: {Model}", model);
+    
     using var httpClient = new HttpClient();
     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+    if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("Authorization header set");
     
     var requestBody = new ChatCompletionRequest
     {
         Model = model,
-        Messages = [ new() { Role = "user", Content = prompt } ]
+        Messages = [new() { Role = "user", Content = prompt }]
     };
     
     var jsonContent = JsonSerializer.Serialize(requestBody, AppJsonSerializerContext.Default.ChatCompletionRequest);
+    if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Request body: {RequestBody}", jsonContent);
+    
     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
     var endpoint = url.TrimEnd('/') + "/chat/completions";
+    if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Sending POST request to {Endpoint}", endpoint);
     
     try
     {
         var response = await httpClient.PostAsync(endpoint, content);
+        if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Response status: {StatusCode}", response.StatusCode);
+        
         var responseContent = await response.Content.ReadAsStringAsync();
+        if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("Response body: {ResponseBody}", responseContent);
         
         if (!response.IsSuccessStatusCode)
         {
@@ -114,13 +158,34 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
             Environment.Exit(1);
         }
         
-        Console.WriteLine(messageContent);
+        // Output based on verbosity level
+        if (verbosity >= Verbosity.Normal)
+        {
+            Console.WriteLine($"Q: {prompt}");
+            Console.WriteLine();
+            Console.WriteLine($"A: {messageContent}");
+        }
+        else
+        {
+            // Minimal - just the answer
+            Console.WriteLine(messageContent);
+        }
     }
     catch (Exception ex)
     {
+        if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug(ex, "Request failed with exception");
         Console.Error.WriteLine($"Error: {ex.Message}");
         Environment.Exit(1);
     }
+}
+
+// Verbosity levels (Quiet not supported as it doesn't make sense for this tool)
+enum Verbosity
+{
+    Minimal,    // M - Just the answer (default)
+    Normal,     // N - Question and answer
+    Detailed,   // D - Additional debug info to stderr
+    Diagnostic  // Diag - Full diagnostic info to stderr
 }
 
 // Models for JSON serialization
