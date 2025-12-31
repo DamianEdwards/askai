@@ -5,6 +5,7 @@
 #:package Microsoft.Extensions.Configuration.UserSecrets@10.0.1
 #:package Microsoft.Extensions.Logging@10.0.1
 #:package Microsoft.Extensions.Logging.Console@10.0.1
+#:property VersionPrefix=0.0.1
 
 using System.CommandLine;
 using System.Net.Http.Headers;
@@ -15,17 +16,19 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 // Build configuration from standard sources
-var configuration = new ConfigurationBuilder()
-    .AddUserSecrets<Program>(optional: true)
+var configurationBuilder = new ConfigurationBuilder()
     .AddJsonFile("askai.settings.json", optional: true)
-    .AddEnvironmentVariables()
-    .Build();
+    .AddEnvironmentVariables("ASKAI_");
 
-var configSection = configuration.GetSection("AskAI");
+#if DEBUG
+configurationBuilder.AddUserSecrets<Program>(optional: true);
+#endif
 
-var urlOption = new Option<string>("--url") { Description = "The OpenAI API endpoint URL. Defaults to GitHub Models (https://models.github.ai/inference).", DefaultValueFactory = _ => configSection["Url"] ?? "https://models.github.ai/inference" };
-var keyOption = new Option<string?>("--key") { Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc.", DefaultValueFactory = _ => configSection["Key"] };
-var modelOption = new Option<string?>("--model") { Description = "The model to use. Defaults to gpt-5-mini", DefaultValueFactory = _ => configSection["Model"] ?? "gpt-5-mini" };
+var configuration = configurationBuilder.Build();
+
+var urlOption = new Option<string>("--url") { Description = "The OpenAI API endpoint URL. Defaults to GitHub Models. [env: ASKAI_URL]", DefaultValueFactory = _ => configuration["url"] ?? "https://models.github.ai/inference" };
+var keyOption = new Option<string?>("--key") { Required = true, Description = "The authentication token, e.g. PAT for GitHub models, API key for OpenAI, etc. [env: ASKAI_KEY]", DefaultValueFactory = _ => configuration["key"] };
+var modelOption = new Option<string>("--model") { Description = "The model to use. Defaults to gpt-5-mini. [env: ASKAI_MODEL]", DefaultValueFactory = _ => configuration["model"] ?? "gpt-5-mini" };
 var validModels = new[] { "gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "custom" };
 modelOption.CompletionSources.Add(validModels);
 modelOption.Validators.Add(result =>
@@ -36,7 +39,7 @@ modelOption.Validators.Add(result =>
         result.AddError($"Invalid model '{value}'. Valid values are: {string.Join(", ", validModels)}");
     }
 });
-var customModelOption = new Option<string?>("--custom-model") { Description = "The custom model name (required when --model is 'custom')", DefaultValueFactory = _ => configSection["CustomModel"] };
+var customModelOption = new Option<string?>("--custom-model") { Description = "The custom model name (required when --model is 'custom'). [env: ASKAI_CUSTOMMODEL]", DefaultValueFactory = _ => configuration["custommodel"] };
 var verbosityOption = new Option<Verbosity>("--verbosity") { Description = "Set the verbosity level", DefaultValueFactory = _ => Verbosity.Normal };
 verbosityOption.CompletionSources.Add(["m", "minimal", "n", "normal", "d", "detailed", "diag", "diagnostic"]);
 var verbosityShortOption = new Option<bool>("-v") { Description = "Enable diagnostic verbosity (shorthand for --verbosity diagnostic)" };
@@ -55,7 +58,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var url = parseResult.GetValue(urlOption)!;
     var key = parseResult.GetValue(keyOption);
-    var model = parseResult.GetValue(modelOption) ?? "gpt-5-mini";
+    var model = parseResult.GetValue(modelOption)!;
     var customModel = parseResult.GetValue(customModelOption);
     var verbosity = parseResult.GetValue(verbosityShortOption) ? Verbosity.Diagnostic : parseResult.GetValue(verbosityOption);
     var prompt = parseResult.GetValue(promptArgument)!;
@@ -74,12 +77,12 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
             _ => LogLevel.None
         });
     });
-    var logger = loggerFactory.CreateLogger("AskAI");
+    var logger = loggerFactory.CreateLogger("askai");
     
     // Validate that --key is provided
     if (string.IsNullOrEmpty(key))
     {
-        Console.Error.WriteLine("Error: --key must be specified (or set via ASKAI__KEY environment variable).");
+        Console.Error.WriteLine($"Error: {keyOption.Name} must be specified (or set via ASKAI_KEY environment variable).");
         Environment.Exit(1);
     }
     
@@ -93,25 +96,25 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Validate custom model option
     if (model == "custom" && string.IsNullOrEmpty(customModel))
     {
-        Console.Error.WriteLine("Error: --custom-model must be specified when --model is 'custom'.");
+        Console.Error.WriteLine($"Error: {customModelOption.Name} must be specified when {modelOption.Name} is 'custom'.");
         Environment.Exit(1);
     }
     
     if (model != "custom" && !string.IsNullOrEmpty(customModel))
     {
-        Console.Error.WriteLine("Error: --custom-model can only be specified when --model is 'custom'.");
+        Console.Error.WriteLine($"Error: {customModelOption.Name} can only be specified when {modelOption.Name} is 'custom'.");
         Environment.Exit(1);
     }
     
     // Get the actual model name
     var actualModel = model == "custom" ? customModel! : model;
     
-    await SendPromptToOpenAI(url, key, actualModel, prompt, verbosity, logger);
+    await SendPromptToOpenAI(url, key, actualModel, prompt, verbosity, logger, cancellationToken);
 });
 
 return await rootCommand.Parse(args).InvokeAsync();
 
-static async Task SendPromptToOpenAI(string url, string key, string model, string prompt, Verbosity verbosity, ILogger logger)
+static async Task SendPromptToOpenAI(string url, string key, string model, string prompt, Verbosity verbosity, ILogger logger, CancellationToken cancellationToken)
 {
     if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Starting request to OpenAI API");
     if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("URL: {Url}", url);
@@ -137,10 +140,10 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
     
     try
     {
-        var response = await httpClient.PostAsync(endpoint, content);
+        var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
         if (logger.IsEnabled(LogLevel.Debug)) logger.LogDebug("Response status: {StatusCode}", response.StatusCode);
         
-        var responseContent = await response.Content.ReadAsStringAsync();
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         if (logger.IsEnabled(LogLevel.Trace)) logger.LogTrace("Response body: {ResponseBody}", responseContent);
         
         if (!response.IsSuccessStatusCode)
@@ -170,6 +173,11 @@ static async Task SendPromptToOpenAI(string url, string key, string model, strin
             // Minimal - just the answer
             Console.WriteLine(messageContent);
         }
+    }
+    catch (OperationCanceledException)
+    {
+        Console.Error.WriteLine("Operation cancelled.");
+        Environment.Exit(1);
     }
     catch (Exception ex)
     {

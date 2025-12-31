@@ -31,16 +31,16 @@ askai "tell me a joke"
 
 ### Configuration
 
-Options can be configured via environment variables, a JSON settings file, or user secrets. Command-line options take precedence over configuration values.
+Options can be configured via environment variables or a JSON settings file, (or user secrets when running a DEBUG build from source). Command-line options take precedence over configuration values.
 
 #### Environment Variables
 
-Set environment variables with the `AskAI__` prefix:
+Set environment variables with the `ASKAI_` prefix:
 
 ```bash
-export AskAI__Key="your-api-key-here"
-export AskAI__Url="https://api.openai.com/v1"
-export AskAI__Model="gpt-5.2"
+export ASKAI_KEY="your-api-key-here"
+export ASKAI_URL="https://api.openai.com/v1"
+export ASKAI_MODEL="gpt-5.2"
 ```
 
 #### Settings File
@@ -49,20 +49,18 @@ Create an `askai.settings.json` file in the same directory:
 
 ```json
 {
-  "AskAI": {
-    "Key": "your-api-key-here",
-    "Url": "https://models.github.ai/inference",
-    "Model": "gpt-5-mini"
-  }
+  "key": "your-api-key-here",
+  "url": "https://models.github.ai/inference",
+  "model": "gpt-5-mini"
 }
 ```
 
 #### User Secrets
 
-You can also use .NET user secrets:
+You can also use .NET user secrets when running a DEBUG build (e.g. from source):
 
 ```bash
-dotnet user-secrets --id askai set "AskAI:Key" "your-api-key-here"
+dotnet user-secrets --file askai.cs set key "your-api-key-here"
 ```
 
 ### Examples
@@ -89,7 +87,7 @@ askai --url https://api.openai.com/v1 --key YOUR_API_KEY "tell me a joke"
 
 With key configured via environment variable:
 ```bash
-export AskAI__Key="your-api-key-here"
+export ASKAI_KEY="your-api-key-here"
 askai "tell me a joke"
 ```
 
@@ -103,12 +101,20 @@ With minimal output (just the answer):
 askai --verbosity minimal "tell me a joke"
 ```
 
-## Running
+## Running from source
 
 ```bash
-dotnet run askai.cs -- "tell me a joke"
+dotnet askai.cs -- "tell me a joke"
 ```
 
+## Publishing from source
 
+Publish the app from source to get a self-contained, native executable for the current platform in the `./artifacts` directory:
+
+```bash
+dotnet publish askai.cs
+```
+
+*NOTE: This requires the prerequisites for building native AOT binaries for your platform. See the [documentation for full details](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites).*
 
 
