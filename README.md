@@ -1,11 +1,46 @@
 # askai
-A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the API response.
+A command-line tool that sends a user-provided prompt to an OpenAI endpoint and prints the response.
 
 ## Prerequisites
 
 This tool is currently only available as source (via this repo) and requires the .NET 10 SDK to run.
 
 .NET 10 is open-source and supports Windows, macOS, and Linux. Get it from https://get.dot.net.
+
+## Getting Started
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/DamianEdwards/askai.git
+   cd askai
+   ```
+
+2. **Create a GitHub Personal Access Token (PAT)**
+
+   - Go to [GitHub Settings > Developer settings > Personal access tokens > Fine-grained tokens](https://github.com/settings/tokens?type=beta)
+   - Click **Generate new token**
+   - Give your token a name (e.g., "askai")
+   - Set an expiration date
+   - Under **Permissions**, expand **Account permissions** and set **GitHub Copilot Chat** (or **Models**) to **Read-only**
+   - Click **Generate token**
+   - Copy the generated token (you won't be able to see it again)
+
+3. **Configure the token using user secrets**
+
+   ```bash
+   dotnet user-secrets --file askai.cs set key "YOUR_GITHUB_PAT_HERE"
+   ```
+
+   Replace `YOUR_GITHUB_PAT_HERE` with the token you copied in step 2.
+
+4. **Run the tool**
+
+   ```bash
+   dotnet askai.cs "tell me a joke"
+   ```
+
+   You should see the AI's response!
 
 ## Usage
 
