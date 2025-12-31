@@ -16,8 +16,20 @@ This tool is currently only available as source (via this repo) and requires the
    cd askai
    ```
 
-2. **Create a GitHub Personal Access Token (PAT)**
+2. **Authenticate with GitHub** (choose one option)
 
+   **Option A: Use the GitHub CLI (recommended)**
+   
+   If you have the [GitHub CLI](https://cli.github.com) installed, just authenticate with it:
+
+   ```bash
+   gh auth login
+   ```
+
+   The tool will automatically use your GitHub CLI token when calling GitHub Models.
+
+   **Option B: Create a GitHub Personal Access Token (PAT)**
+   
    - Go to [GitHub Settings > Developer settings > Personal access tokens > Fine-grained tokens](https://github.com/settings/tokens?type=beta)
    - Click **Generate new token**
    - Give your token a name (e.g., "askai")
@@ -25,16 +37,13 @@ This tool is currently only available as source (via this repo) and requires the
    - Under **Permissions**, expand **Account permissions** and set **GitHub Copilot Chat** (or **Models**) to **Read-only**
    - Click **Generate token**
    - Copy the generated token (you won't be able to see it again)
+   - Configure the token using user secrets:
 
-3. **Configure the token using user secrets**
+     ```bash
+     dotnet user-secrets --file askai.cs set key "YOUR_GITHUB_PAT_HERE"
+     ```
 
-   ```bash
-   dotnet user-secrets --file askai.cs set key "YOUR_GITHUB_PAT_HERE"
-   ```
-
-   Replace `YOUR_GITHUB_PAT_HERE` with the token you copied in step 2.
-
-4. **Run the tool**
+3. **Run the tool**
 
    ```bash
    dotnet askai.cs "tell me a joke"
@@ -51,7 +60,7 @@ dotnet askai.cs "tell me a joke"
 ### Options
 
 - `--url`: The OpenAI endpoint URL. Defaults to `https://models.github.ai/inference`
-- `--key`: The authentication token (PAT for GitHub Models, API key for OpenAI, etc.)
+- `--key`: The authentication token (PAT for GitHub Models, API key for OpenAI, etc.). Optional when using GitHub Models with the GitHub CLI installed and authenticated
 - `--model`: The model to use. Valid values: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `custom`. Defaults to `gpt-5-mini`
 - `--custom-model`: The custom model name (required when `--model` is `custom`)
 - `--verbosity`: Set the verbosity level. Valid values: `minimal`, `normal`, `detailed`, `diagnostic`. Defaults to `normal`
@@ -73,6 +82,17 @@ dotnet askai.cs "tell me a joke"
 ### Configuration
 
 Options can be configured via environment variables or a JSON settings file, (or user secrets when running a DEBUG build from source). Command-line options take precedence over configuration values.
+
+#### GitHub CLI Authentication
+
+When using the default GitHub Models endpoint, the tool can automatically retrieve your authentication token from the [GitHub CLI](https://cli.github.com) if it's installed and you're logged in:
+
+```bash
+gh auth login
+dotnet askai.cs "tell me a joke"
+```
+
+No additional configuration is needed! The tool will use `gh auth token` to get your token.
 
 #### Environment Variables
 
@@ -119,7 +139,12 @@ dotnet user-secrets --file askai.cs set key "your-api-key-here"
 
 ### Examples
 
-Using GitHub Models (default URL):
+Using GitHub Models with GitHub CLI (no key needed):
+```bash
+dotnet askai.cs "tell me a joke"
+```
+
+Using GitHub Models with explicit key:
 ```bash
 dotnet askai.cs --key YOUR_API_KEY "tell me a joke"
 ```
